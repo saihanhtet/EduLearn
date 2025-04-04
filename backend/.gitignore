@@ -1,0 +1,28 @@
+# Ignore Python bytecode
+*.py[cod]
+__pycache__/
+src/coreBackend/__pycache__/
+src/coreBackend/__pycache__/*
+
+# Ignore virtual environments
+venv/
+env/
+
+# Ignore SQLite database
+*.sqlite3
+
+# Ignore Django migration files
+*/migrations/*.py[cod]
+*/migrations/[0-9]*_*.py
+*/migrations/__pycache__/
+
+src/apps/*/migrations/[0-9]*_*.py
+# Ignore IDE/editor-specific files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
