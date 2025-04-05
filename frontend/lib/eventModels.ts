@@ -1,6 +1,29 @@
 // types.ts
+export interface CourseSectionProps {
+    title: string;
+    courses: CourseGetProps[];
+    itemsPerPage: number;
+    gridCols?: string;
+    showOverlayButtons?: boolean;
+    showResultCount?: boolean;
+    responsiveItemsPerPage?: boolean;
+}
+export interface EnrollmentSchema {
+    id: number;
+    user: UserDetail;
+    course: CourseGetProps;
+    enrolled_at: string;
+    progress: number;
+    completed: boolean;
+}
+export interface ApiError extends Error {
+    status: number;
+}
 
-
+export interface UseApiDataProps<T> {
+    endpoint: string;
+    mapData?: (data: EnrollmentSchema[]) => T[];
+}
 
 export interface CourseGetProps {
     id: number;

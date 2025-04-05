@@ -1,319 +1,312 @@
-// Ensure the environment variable is defined
-export const API_BASE_URL: string = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+"use client";
 
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import toast from "react-hot-toast";
+import { UseApiDataProps } from "./eventModels";
+import { useUserStore } from "./store";
+
+// Environment variable validation
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 if (!API_BASE_URL) {
-    throw new Error('NEXT_PUBLIC_API_BASE_URL is not defined in environment variables');
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined in environment variables");
 }
 
-// Custom error class to include status code
-class ApiError extends Error {
-    public status: number;
-
-    constructor(message: string, status: number) {
-        super(message);
-        this.name = 'ApiError';
-        this.status = status;
-    }
+// Custom error type
+interface ApiError extends Error {
+    status: number;
+    details?: unknown;
 }
 
-export class ApiService {
-    // Helper method to get the auth token from localStorage
-    private getAuthToken(): string | null {
-        return localStorage.getItem('token');
-    }
+const createApiError = (message: string, status: number, details?: unknown): ApiError => {
+    const error = new Error(message) as ApiError;
+    error.name = "ApiError";
+    error.status = status;
+    error.details = details;
+    return error;
+};
 
-    // Helper method to set the auth token in localStorage
-    private setAuthToken(token: string): void {
-        localStorage.setItem('token', token);
-    }
+// Token management
+const getAuthToken = (): string | null =>
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-    // Helper method to remove the auth token from localStorage
-    private removeAuthToken(): void {
-        localStorage.removeItem('token');
-    }
+const setAuthToken = (token: string): void => {
+    if (typeof window !== "undefined") localStorage.setItem("token", token);
+};
 
-    // Helper method to create headers with auth token
-    private getAuthHeaders(): Record<string, string> {
-        const token = this.getAuthToken();
-        return {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        };
-    }
+const removeAuthToken = (): void => {
+    if (typeof window !== "undefined") localStorage.removeItem("token");
+};
 
-    private getFileUploadHeaders(): Record<string, string> {
-        const token = this.getAuthToken();
-        return {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        };
-    }
+// Header generation
+const getHeaders = (includeContentType = true): Record<string, string> => {
+    const token = getAuthToken();
+    return {
+        ...(includeContentType && { "Content-Type": "application/json" }),
+        ...(token && { Authorization: `Bearer ${token}` }),
+    };
+};
 
-    // Helper method to handle API response errors
-    private async handleApiError(res: Response, resource: string, action: string): Promise<void> {
-        let errorMessage = `Failed to ${action} ${resource}`;
+// Request cache
+const requestCache = new Map<string, Promise<unknown>>();
+
+// Core fetch function with advanced features
+const fetchApi = async <T>(
+    url: string,
+    options: RequestInit & { retries?: number; retryDelay?: number },
+    resource: string,
+    action: string,
+    signal?: AbortSignal
+): Promise<T> => {
+    const cacheKey = `${options.method || "GET"}:${url}`;
+    if (requestCache.has(cacheKey)) return requestCache.get(cacheKey) as Promise<T>;
+
+    const { retries = 3, retryDelay = 1000, ...fetchOptions } = options;
+    let attempt = 0;
+
+    const request = async (): Promise<T> => {
         try {
-            const errorData = await res.json();
-            errorMessage = errorData.message || errorMessage;
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (jsonError) {
-            errorMessage = res.statusText || errorMessage;
+            const res = await fetch(url, { ...fetchOptions, signal });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw createApiError(
+                    errorData.message || res.statusText || `Failed to ${action} ${resource}`,
+                    res.status,
+                    errorData
+                );
+            }
+            return res.json();
+        } catch (err) {
+            if (signal?.aborted) throw createApiError("Request aborted", 0);
+            if (err instanceof Error && err.message.includes("Failed to fetch")) {
+                if (attempt < retries) {
+                    attempt++;
+                    await new Promise((resolve) => setTimeout(resolve, retryDelay * attempt));
+                    return request();
         }
-
-        if (res.status === 401) {
-            throw new ApiError(`Authentication failed: Invalid or missing token for ${resource}`, res.status);
-        } else if (res.status === 403) {
-            throw new ApiError(`Authorization failed: You do not have permission to access ${resource}`, res.status);
-        } else if (res.status === 404) {
-            throw new ApiError(`Resource not found: ${resource} does not exist`, res.status);
-        } else if (res.status >= 500) {
-            throw new ApiError(`Server error: Failed to ${action} ${resource} (Status: ${res.status})`, res.status);
-        } else {
-            throw new ApiError(errorMessage, res.status);
-        }
-    }
-
-    // Reusable error handler for catch blocks
-    private handleCatchError(err: unknown, resource: string, action: string): never {
-        if (err instanceof ApiError) {
+                throw createApiError(
+                    `Network error after ${retries} retries: Failed to ${action} ${resource}`,
+                    0,
+                    err
+                );
+            }
             throw err;
         }
-        const error = err as Error;
-        if (error.message.includes('Failed to fetch')) {
-            throw new ApiError(
-                `Network error: Unable to ${action} ${resource}. This may be due to CORS issues, the backend not running, or a network failure.`,
-                0
-            );
-        }
-        throw new ApiError(error.message || `Failed to ${action} ${resource}`, 0);
-    }
+    };
 
-    // LOGIN: Authenticate user and store token
-    public async login<T>(data: { email: string; password: string }): Promise<T> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/token/pair`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+    const promise = request();
+    requestCache.set(cacheKey, promise);
+    promise.finally(() => requestCache.delete(cacheKey));
+    return promise;
+};
+
+// API methods
+export const apiService = {
+    login: async <T>(data: { email: string; password: string }): Promise<T & { access: string }> => {
+        const response = await fetchApi<T & { access: string }>(
+            `${API_BASE_URL}/token/pair`,
+            {
+                method: "POST",
+                headers: getHeaders(),
                 body: JSON.stringify(data),
-            });
-
-            if (!res.ok) {
-                await this.handleApiError(res, 'authentication', 'login');
-            }
-
-            const response: T & { access: string; refresh?: string } = await res.json();
-            this.setAuthToken(response.access);
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, 'authentication', 'login');
-        }
-    }
-
-    // REGISTER: Create new user account
-    public async register<T>(data: { username: string; password: string; email: string, role: string }): Promise<T> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/auth/register`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data),
-            });
-
-            if (!res.ok) {
-                await this.handleApiError(res, 'user', 'register');
-            }
-
-            const response: T = await res.json();
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, 'user', 'register');
-        }
-    }
-
-    // LOGOUT: Clear authentication token
-    public async logout(): Promise<void> {
-        this.removeAuthToken();
-        await fetch(`${API_BASE_URL}/auth/logout`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
             },
+            "authentication",
+            "login"
+        );
+        setAuthToken(response.access);
+        // Fetch user details after login
+        try {
+            const userData = await apiService.getMe<{ id: number; username: string; email: string; role: string }>("users");
+            useUserStore.getState().setUser({
+                id: userData.id,
+                username: userData.username,
+                email: userData.email,
+                role: userData.role || "guest",
+            });
+        } catch (err) {
+            console.error("Failed to fetch user details after login:", err);
+            useUserStore.getState().setUser({ role: "student" });
+        }
+        return response;
+    },
+
+    register: async <T>(data: {
+        username: string;
+        password: string;
+        email: string;
+        role: string;
+    }): Promise<T> =>
+        fetchApi<T>(
+            `${API_BASE_URL}/auth/register`,
+            {
+                method: "POST",
+                headers: getHeaders(),
+                body: JSON.stringify(data),
+            },
+            "user",
+            "register"
+        ),
+
+    logout: async (): Promise<void> => {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+            method: "POST",
+            headers: getHeaders(),
         });
-    }
+        removeAuthToken();
+        useUserStore.getState().clearUser();
+    },
 
-    public async getDashboard<T>(): Promise<T> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/dashboard`, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-            });
-            if (!res.ok) {
-                await this.handleApiError(res, 'dashboard', 'get');
-            }
+    getDashboard: <T>(): Promise<T> =>
+        fetchApi<T>(
+            `${API_BASE_URL}/dashboard`,
+            { method: "GET", headers: getHeaders() },
+            "dashboard",
+            "get"
+        ),
 
-            const response: T = await res.json();
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, 'dashboard', 'get');
-        }
-    }
-
-    // CREATE: Create a new resource
-    public async create<T, U>(resource: string, data: U): Promise<T> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/${resource}`, {
-                method: 'POST',
-                headers: this.getAuthHeaders(),
+    create: async <T, U>(resource: string, data: U): Promise<T> =>
+        fetchApi<T>(
+            `${API_BASE_URL}/${resource}`,
+            {
+                method: "POST",
+                headers: getHeaders(),
                 body: JSON.stringify(data),
-            });
+            },
+            resource,
+            "create"
+        ),
 
-            if (!res.ok) {
-                await this.handleApiError(res, resource, 'create');
-            }
+    getRecommended: <T>(query: string): Promise<T> =>
+        fetchApi<T>(
+            `${API_BASE_URL}/recommend${query}`,
+            { method: "GET", headers: getHeaders() },
+            "recommended courses",
+            "fetch"
+        ),
 
-            const response: T = await res.json();
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, resource, 'create');
-        }
-    }
+    getAll: <T>(resource: string, signal?: AbortSignal): Promise<T[]> =>
+        fetchApi<T[]>(
+            `${API_BASE_URL}/${resource}`,
+            { method: "GET", headers: getHeaders() },
+            resource,
+            "fetch",
+            signal
+        ),
 
-    public async getRecommended<T>(query: string): Promise<T> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/recommend${query}`, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-            });
-            if (!res.ok) {
-                await this.handleApiError(res, 'recommended courses', 'fetch');
-            }
-            return await res.json();
-        } catch (err) {
-            this.handleCatchError(err, 'recommended courses', 'fetch');
-        }
-    }
+    getMe: <T>(resource: string): Promise<T> =>
+        fetchApi<T>(
+            `${API_BASE_URL}/${resource}/me`,
+            { method: "GET", headers: getHeaders() },
+            resource,
+            "fetch"
+        ),
 
-    // READ: Get all resources
-    public async getAll<T>(resource: string): Promise<T[]> {
-        try {
-            const url = `${API_BASE_URL}/${resource}`;
-            const res = await fetch(url, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-            });
+    getById: <T>(resource: string, id: number | string): Promise<T> =>
+        fetchApi<T>(
+            `${API_BASE_URL}/${resource}/${id}`,
+            { method: "GET", headers: getHeaders() },
+            `${resource} with ID ${id}`,
+            "fetch"
+        ),
 
-            if (!res.ok) {
-                await this.handleApiError(res, resource, 'fetch');
-            }
-
-            const response: T[] = await res.json();
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, resource, 'fetch');
-        }
-    }
-
-    // READ: Get Me
-    public async getMe<T>(resource: string): Promise<T> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/${resource}/me`, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-            });
-
-            if (!res.ok) {
-                await this.handleApiError(res, `${resource}`, 'fetch');
-            }
-
-            const response: T = await res.json();
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, `${resource}`, 'fetch');
-        }
-    }
-
-    // READ: Get a single resource by ID
-    public async getById<T>(resource: string, id: number | string): Promise<T> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/${resource}/${id}`, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-            });
-
-            if (!res.ok) {
-                await this.handleApiError(res, `${resource} with ID ${id}`, 'fetch');
-            }
-
-            const response: T = await res.json();
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, `${resource} with ID ${id}`, 'fetch');
-        }
-    }
-
-    // UPDATE: Update a resource by ID
-    public async update<T, U>(resource: string, id: number | string, data: U): Promise<T> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/${resource}/${id}`, {
-                method: 'PUT',
-                headers: this.getAuthHeaders(),
+    update: async <T, U>(resource: string, id: number | string, data: U): Promise<T> =>
+        fetchApi<T>(
+            `${API_BASE_URL}/${resource}/${id}`,
+            {
+                method: "PUT",
+                headers: getHeaders(),
                 body: JSON.stringify(data),
-            });
+            },
+            `${resource} with ID ${id}`,
+            "update"
+        ),
 
-            if (!res.ok) {
-                await this.handleApiError(res, `${resource} with ID ${id}`, 'update');
-            }
+    delete: (resource: string, id: number | string): Promise<void> =>
+        fetchApi<void>(
+            `${API_BASE_URL}/${resource}/${id}`,
+            { method: "DELETE", headers: getHeaders() },
+            `${resource} with ID ${id}`,
+            "delete"
+        ),
 
-            const response: T = await res.json();
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, `${resource} with ID ${id}`, 'update');
-        }
-    }
-
-    // DELETE: Delete a resource by ID
-    public async delete(resource: string, id: number | string): Promise<void> {
-        try {
-            const res = await fetch(`${API_BASE_URL}/${resource}/${id}`, {
-                method: 'DELETE',
-                headers: this.getAuthHeaders(),
-            });
-
-            if (!res.ok) {
-                await this.handleApiError(res, `${resource} with ID ${id}`, 'delete');
-            }
-        } catch (err) {
-            this.handleCatchError(err, `${resource} with ID ${id}`, 'delete');
-        }
-    }
-
-    public async uploadFile<T>(
+    uploadFile: async <T>(
         resource: string,
         id: number | string,
         file: File,
         fieldName: string = "image"
-    ): Promise<T> {
-        try {
-            const formData = new FormData();
-            formData.append(fieldName, file);
-            console.table([...formData.entries()]);
-            const res = await fetch(`${API_BASE_URL}/${resource}/${id}/upload-image`, {
-                method: 'POST',
-                headers: this.getFileUploadHeaders(),
+    ): Promise<T> => {
+        const formData = new FormData();
+        formData.append(fieldName, file);
+        return fetchApi<T>(
+            `${API_BASE_URL}/${resource}/${id}/upload-image`,
+            {
+                method: "POST",
+                headers: getHeaders(false),
                 body: formData,
-            });
-            if (!res.ok) {
-                await this.handleApiError(res, `${resource} image with ID ${id}`, 'upload');
-            }
-            const response: T = await res.json();
-            return response;
-        } catch (err) {
-            this.handleCatchError(err, `${resource} image with ID ${id}`, 'upload');
-        }
-    }
-}
+            },
+            `${resource} image with ID ${id}`,
+            "upload"
+        );
+    },
+};
 
-// Create a singleton instance
-export const apiService = new ApiService();
+// Enhanced useApiData hook with abort and refresh
+export const useApiData = <T>({ endpoint, mapData }: UseApiDataProps<T>) => {
+    const [data, setData] = useState<T[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const router = useRouter();
+
+    const handleApiError = (err: ApiError) => {
+        const errorMessage = err.message || "Failed to load data";
+        setError(errorMessage);
+        switch (err.status) {
+            case 401:
+                toast.error("Authentication failed. Please log in again.");
+                router.push("/login");
+                break;
+            case 403:
+                toast.error("You do not have permission to access this resource.");
+                router.forward();
+                break;
+            case 404:
+                toast.error("Resource not found.");
+                break;
+            case 0:
+                toast.error("Network error. Please check your connection or server status.");
+                break;
+            default:
+                toast.error(errorMessage);
+        }
+    };
+
+    const fetchData = useCallback(
+        async (signal?: AbortSignal) => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const response = await apiService.getAll<unknown>(endpoint, signal);
+                const mappedData = mapData ? mapData(response) : response;
+                setData(mappedData as T[]);
+            } catch (err) {
+                if (!signal?.aborted) handleApiError(err as ApiError);
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [endpoint] // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchData(controller.signal);
+        return () => controller.abort();
+    }, [fetchData, router]);
+
+    return {
+        data,
+        isLoading,
+        error,
+        refresh: () => fetchData(),
+    };
+};

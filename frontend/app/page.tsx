@@ -1,25 +1,12 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function LandingPage() {
   const router = useRouter();
-  const [isDarkMode, setIsDarkMode] = useState(false);
-
-  // Optional: Detect system preference for dark mode
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    setIsDarkMode(mediaQuery.matches);
-
-    const handler = (e) => setIs  setIsDarkMode(e.matches);
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-
   return (
-    <div className={`min-h-screen flex flex-col font-geist ${isDarkMode ? 'dark' : ''}`}>
+    <div className={`min-h-screen flex flex-col font-geist`}>
       {/* Navbar */}
       <nav className="bg-white dark:bg-gray-900 shadow-md py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">

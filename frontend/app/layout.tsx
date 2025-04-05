@@ -19,6 +19,9 @@ export const metadata: Metadata = {
 
 import { Toaster } from "react-hot-toast";
 
+/**
+ * The `ToastProvider` function returns a `Toaster` component in a TypeScript React application.
+ */
 const ToastProvider = () => {
   return <Toaster />;
 };

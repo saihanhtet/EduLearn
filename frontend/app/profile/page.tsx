@@ -16,16 +16,22 @@ import { apiService } from "@/lib/apiService";
 import Loader from "@/components/partials/Loader";
 import { UserDetail, ApiError } from "@/lib/eventModels";
 
-// Updated User Type based on UserDetailSchema
+/**
+ * The `useUserProfile` custom hook in TypeScript React manages user profile data fetching, updating,
+ * loading states, errors, and toast messages.
+ * @returns The `useUserProfile` custom hook is returning an object with the following properties:
+ */
 
-
-// Custom Hook for User Profile
 export const useUserProfile = () => {
     const [user, setUser] = useState<UserDetail | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
 
+    /**
+     * The function `fetchUserProfile` is an asynchronous function that fetches the user profile data,
+     * handles errors, and updates the state accordingly.
+     */
     const fetchUserProfile = async () => {
         setIsLoading(true);
         setError(null);
@@ -44,6 +50,15 @@ export const useUserProfile = () => {
         }
     };
 
+    /**
+     * The function `updateUserProfile` is an asynchronous function that updates a user's profile data
+     * using an API service, handling loading states, errors, and displaying toast messages
+     * accordingly.
+     * @param {UserDetail} userData - The `userData` parameter in the `updateUserProfile` function is
+     * of type `UserDetail`, which likely contains information about a user such as their name, email,
+     * profile picture, etc. This data is used to update the user's profile information in the
+     * application.
+     */
     const updateUserProfile = async (userData: UserDetail) => {
         setIsLoading(true);
         console.log(userData);
@@ -65,6 +80,7 @@ export const useUserProfile = () => {
 
     useEffect(() => {
         fetchUserProfile();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [router]);
 
     return { user, isLoading, error, updateUserProfile };
@@ -86,6 +102,8 @@ const ProfileForm: React.FC<{
         phone_number: "",
     });
 
+    /* The `useEffect` hook you provided is responsible for updating the form data state (`formData`)
+    whenever the `user` object changes. Here's a breakdown of what it does: */
     useEffect(() => {
         if (user) {
             setFormData({
@@ -100,15 +118,37 @@ const ProfileForm: React.FC<{
         }
     }, [user]);
 
+    /**
+     * The handleChange function updates the form data based on the input value of an input field or
+     * text area in a TypeScript React component.
+     * @param e - The parameter `e` in the `handleChange` function is of type
+     * `React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>`. This means it is an event object
+     * that is triggered when the value of an input field or a text area element changes in a React
+     * component.
+     */
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
+    /**
+     * The function `handleGenderChange` updates the gender value in the form data based on the
+     * selected option.
+     * @param {"Male" | "Female" | "Other"} value - The `value` parameter in the `handleGenderChange`
+     * function is a string literal type that can only be one of three options: "Male", "Female", or
+     * "Other".
+     */
     const handleGenderChange = (value: "Male" | "Female" | "Other") => {
         setFormData((prev) => ({ ...prev, gender: value }));
     };
 
+    /**
+     * The handleSubmit function in TypeScript React handles form submission by extracting user data
+     * and passing it to the onSubmit function.
+     * @param e - The parameter `e` in the `handleSubmit` function is of type `React.FormEvent`. It is
+     * an event object that represents a form submission event in React. In this function, it is used
+     * to prevent the default form submission behavior using `e.preventDefault()`.
+     */
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const userData: Partial<UserDetail> = {

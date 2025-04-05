@@ -22,16 +22,23 @@ export default function Register() {
     const [isDarkMode, setIsDarkMode] = useState(false);
     const router = useRouter();
 
-    // Detect system preference for dark mode
+
+    /* The `useEffect` hook in the provided code snippet is responsible for setting up a listener to
+    detect changes in the user's preferred color scheme (light or dark mode) and updating the state
+    variable `isDarkMode` accordingly. */
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
         setIsDarkMode(mediaQuery.matches);
 
-        const handler = (e) => setIsDarkMode(e.matches);
+        const handler = (e: { matches: boolean | ((prevState: boolean) => boolean); }) => setIsDarkMode(e.matches);
         mediaQuery.addEventListener('change', handler);
         return () => mediaQuery.removeEventListener('change', handler);
     }, []);
 
+    /**
+     * The `handleRegister` function in TypeScript React registers a user with the provided information
+     * and redirects to the login page upon successful registration, handling errors appropriately.
+     */
     const handleRegister = async () => {
         try {
             await apiService.register<RegisterResponse>({
