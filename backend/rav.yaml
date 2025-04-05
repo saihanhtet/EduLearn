@@ -19,7 +19,7 @@ scripts:
     - cd src && python manage.py extract_data_for_ml
   preprocess:
     - cd src && python manage.py preprocess_data_for_recommendation
-  recommend_courses:
+  recommend:
     - cd src && python manage.py recommend_courses 7 --top_n 8
   curl_auth: |
     curl -X POST -H "Content-Type: application/json" -d "{\"email\": \"testuser@gmail.com\", \"password\": \"testuser123\"}" http://127.0.0.1:8080/api/token/pair

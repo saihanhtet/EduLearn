@@ -78,13 +78,13 @@ def course_to_schema(course: Course) -> CourseSchema:
     return CourseSchema(
         id=course.id,
         title=course.title,
-        subject=course.subject,
-        level=course.level,
+        subject=course.subject if course.subject is not None else '',
+        level=course.level if course.level is not None else 'Beginner',
         price=float(course.price) if course.price is not None else None,
         image=course.image.url if course.image else None,
         difficulty_score=course.difficulty_score,
-        description=course.description,
-        status=course.status,
+        description=course.description if course.price is not None else '',
+        status=course.status if course.price is not None else 'Draft',
         created_by=user_to_schema(
             course.created_by) if course.created_by else None,
         created_at=course.created_at.isoformat(),

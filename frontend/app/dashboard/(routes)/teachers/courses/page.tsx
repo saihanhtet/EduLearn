@@ -106,6 +106,7 @@ const CoursePage = () => {
 
     useEffect(() => {
         fetchCourses();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Pagination Logic

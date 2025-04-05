@@ -3,7 +3,9 @@
 __pycache__/
 src/coreBackend/__pycache__/
 src/coreBackend/__pycache__/*
-
+# src/media/course_images/*
+# src/media/chapter_videos/*
+# src/media/assignment_submissions/*
 # Ignore virtual environments
 venv/
 env/

@@ -238,7 +238,7 @@ export default function CoursesPage() {
                                                 <CourseSection
                                                     title={searchQuery.trim() !== "" ? "Search Results" : "All Courses"}
                                                     courses={filteredCourses}
-                                                    itemsPerPage={10}
+                                                    itemsPerPage={12}
                                                     gridCols="grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                                                     showResultCount={searchQuery.trim() !== ""}
                                                     responsiveItemsPerPage={false}

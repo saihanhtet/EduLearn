@@ -1,5 +1,4 @@
-# apps/core/management/commands/seed.py
-from django.utils import timezone  # Import timezone for aware datetimes
+from django.utils import timezone
 from django.core.management.base import BaseCommand
 from django.core.exceptions import ObjectDoesNotExist
 from apps.users.models import CustomUser
@@ -10,7 +9,6 @@ from datetime import datetime, timedelta
 import os
 import json
 from pathlib import Path
-
 
 def find_json_file(file_name, start_path='.'):
     for root, dirs, files in os.walk(start_path):
@@ -44,6 +42,7 @@ class Command(BaseCommand):
             self.stdout.write("users.json not found.")
             user_data = []
 
+        # Pass user_data to seed_users
         self.seed_users(user_data)
         self.seed_courses(course_data)
         self.seed_enrollments()
@@ -59,6 +58,7 @@ class Command(BaseCommand):
             initial_users = []
         student_interests = ["Math", "Science",
                              "History", "Literature", "Computer Science"]
+        # Generate additional fake users
         for _ in range(1, 50):
             first_name = self.faker.first_name()
             last_name = self.faker.last_name()
@@ -77,35 +77,48 @@ class Command(BaseCommand):
             initial_users.append(student)
 
         for user_data in initial_users:
-            try:
-                CustomUser.objects.get(email=user_data["email"])
+            # Check if user already exists
+            if CustomUser.objects.filter(email=user_data["email"]).exists():
                 self.stdout.write(
                     f"User {user_data['email']} already exists, skipping...")
-            except ObjectDoesNotExist:
+                continue
+
+            try:
                 if user_data.get("is_superuser"):
-                    CustomUser.objects.create_superuser(
-                        email=user_data["email"], username=user_data["username"], password=user_data["password"])
+                    user = CustomUser.objects.create_superuser(
+                        email=user_data["email"],
+                        username=user_data["username"],
+                        password=user_data["password"]
+                    )
                 else:
                     user = CustomUser.objects.create_user(
-                        email=user_data["email"], username=user_data["username"], password=user_data["password"], role=user_data["role"])
+                        email=user_data["email"],
+                        username=user_data["username"],
+                        password=user_data["password"],
+                        role=user_data.get("role", "student")
+                    )
                     user.first_name = user_data.get("first_name", "")
                     user.last_name = user_data.get("last_name", "")
                     if "preferred_subject" in user_data:
                         user.preferred_subject = user_data["preferred_subject"]
-                    user.save()
+                    user.save()  # Save additional fields
                 self.stdout.write(
                     f"Created user: {user_data['email']} with role {user_data['role']}")
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(
+                    f"Error creating user {user_data['email']}: {str(e)}"))
 
     def seed_courses(self, courses):
         teacher_emails = {
             "teacher1@gmail.com": None, "teacher2@gmail.com": None, "teacher3@gmail.com": None,
-            "teacher4@gmail.com": None, "teacher5@gmail.com": None}
+            "teacher4@gmail.com": None, "teacher5@gmail.com": None
+        }
         try:
             for email in teacher_emails.keys():
                 teacher_emails[email] = CustomUser.objects.get(email=email)
         except ObjectDoesNotExist:
             self.stdout.write(self.style.ERROR(
-                "One or more teachers not found. Please seed users first."))
+                "One or more teachers not found. Please seed users first or check teacher emails in courses.json."))
             return
 
         courses_to_create = []
@@ -116,14 +129,13 @@ class Command(BaseCommand):
                     f"Invalid teacher email: {course_data['created_by']} for course {course_data['title']}. Skipping..."))
                 continue
             course_data["created_by"] = created_by_teacher
-            try:
-                Course.objects.get(title=course_data["title"])
+            if Course.objects.filter(title=course_data["title"]).exists():
                 self.stdout.write(
                     f"Course {course_data['title']} already exists, skipping...")
-            except ObjectDoesNotExist:
-                courses_to_create.append(course_data)
-                self.stdout.write(
-                    f"Course {course_data['title']} does not exist, adding to creation list...")
+                continue
+            courses_to_create.append(course_data)
+            self.stdout.write(
+                f"Course {course_data['title']} does not exist, adding to creation list...")
 
         if courses_to_create:
             Course.objects.bulk_create([Course(**course)
@@ -157,9 +169,7 @@ class Command(BaseCommand):
                     random.sample(other_courses, num_other))
 
             for course in selected_courses:
-                try:
-                    Enrollment.objects.get(user=student, course=course)
-                except ObjectDoesNotExist:
+                if not Enrollment.objects.filter(user=student, course=course).exists():
                     enrolled_at = self.faker.date_time_between(
                         start_date="-1y", end_date="now")
                     Enrollment.objects.create(
@@ -184,13 +194,13 @@ class Command(BaseCommand):
                     1, 5) if interaction_type == "rated" else None
                 timestamp = self.faker.date_time_between_dates(
                     datetime_start=enrollment.enrolled_at, datetime_end=datetime.now())
-                try:
-                    UserInteraction.objects.get(
-                        user=enrollment.user, course=enrollment.course, interaction_type=interaction_type)
-                except ObjectDoesNotExist:
+                if not UserInteraction.objects.filter(
+                    user=enrollment.user, course=enrollment.course, interaction_type=interaction_type
+                ).exists():
                     UserInteraction.objects.create(
                         user=enrollment.user, course=enrollment.course, interaction_type=interaction_type,
-                        rating=rating, timestamp=timestamp)
+                        rating=rating, timestamp=timestamp
+                    )
                     self.stdout.write(
                         f"Created interaction: {enrollment.user.username} {interaction_type} {enrollment.course.title}")
 
@@ -203,19 +213,19 @@ class Command(BaseCommand):
 
         for enrollment in enrollments:
             has_completed = UserInteraction.objects.filter(
-                user=enrollment.user, course=enrollment.course, interaction_type="completed").exists()
+                user=enrollment.user, course=enrollment.course, interaction_type="completed"
+            ).exists()
             progress = random.uniform(
                 90, 100) if has_completed else random.uniform(0, 90)
             last_accessed = self.faker.date_time_between_dates(
                 datetime_start=enrollment.enrolled_at, datetime_end=datetime.now())
-            try:
-                LearningProgress.objects.get(
-                    user=enrollment.user, course=enrollment.course)
-            except ObjectDoesNotExist:
+            if not LearningProgress.objects.filter(user=enrollment.user, course=enrollment.course).exists():
                 LearningProgress.objects.create(
-                    user=enrollment.user, course=enrollment.course, progress=progress, last_accessed=last_accessed)
+                    user=enrollment.user, course=enrollment.course, progress=progress, last_accessed=last_accessed
+                )
                 self.stdout.write(
-                    f"Created progress: {enrollment.user.username} in {enrollment.course.title} with {progress:.1f}%")
+                    f"Created progress: {enrollment.user.username} in {enrollment.course.title} with {progress:.1f}%"
+                )
 
     def seed_chapters(self):
         courses = Course.objects.all()
@@ -238,20 +248,13 @@ class Command(BaseCommand):
                 pdf = f"/media/chapter_pdfs/{self.faker.file_name(category='office')}" if chosen_content == "pdf" else None
                 text_content = self.faker.paragraph(
                     nb_sentences=5) if chosen_content == "text" else None
-                try:
-                    Chapter.objects.get(course=course, order=i+1)
+                if not Chapter.objects.filter(course=course, order=i+1).exists():
+                    Chapter.objects.create(
+                        course=course, title=title, order=i+1, description=self.faker.paragraph(nb_sentences=2),
+                        video=video, pdf=pdf, text_content=text_content
+                    )
                     self.stdout.write(
-                        f"Chapter {title} for {course.title} already exists, skipping...")
-                except ObjectDoesNotExist:
-                    try:
-                        chapter = Chapter.objects.create(
-                            course=course, title=title, order=i+1, description=self.faker.paragraph(nb_sentences=2),
-                            video=video, pdf=pdf, text_content=text_content)
-                        self.stdout.write(
-                            f"Created chapter: {chapter.title} for {course.title}")
-                    except Exception as e:
-                        self.stdout.write(self.style.ERROR(
-                            f"Error creating chapter for {course.title}: {str(e)}"))
+                        f"Created chapter: {title} for {course.title}")
 
     def seed_assignments(self):
         chapters = Chapter.objects.all()
@@ -265,25 +268,17 @@ class Command(BaseCommand):
         for chapter in chapters:
             if random.choice([True, False]):  # 50% chance
                 title = f"Assignment: {self.faker.sentence(nb_words=3)}"
-                # Make due_date timezone-aware
                 due_date_naive = self.faker.date_time_between(
                     start_date="now", end_date="+30d")
                 due_date = timezone.make_aware(due_date_naive)
-                try:
-                    Assignment.objects.get(chapter=chapter)
+                if not Assignment.objects.filter(chapter=chapter).exists():
+                    Assignment.objects.create(
+                        chapter=chapter, title=title, description=self.faker.paragraph(
+                            nb_sentences=3),
+                        max_score=100, due_date=due_date
+                    )
                     self.stdout.write(
-                        f"Assignment for {chapter.title} already exists, skipping...")
-                except ObjectDoesNotExist:
-                    try:
-                        assignment = Assignment.objects.create(
-                            chapter=chapter, title=title, description=self.faker.paragraph(
-                                nb_sentences=3),
-                            max_score=100, due_date=due_date)
-                        self.stdout.write(
-                            f"Created assignment: {assignment.title} for {chapter.title}")
-                    except Exception as e:
-                        self.stdout.write(self.style.ERROR(
-                            f"Error creating assignment for {chapter.title}: {str(e)}"))
+                        f"Created assignment: {title} for {chapter.title}")
             else:
                 self.stdout.write(
                     f"No assignment created for {chapter.title} (random choice)")
@@ -291,13 +286,9 @@ class Command(BaseCommand):
     def seed_submissions(self):
         assignments = Assignment.objects.all()
         students = CustomUser.objects.filter(role="student")
-        if not assignments:
+        if not assignments or not students:
             self.stdout.write(self.style.ERROR(
-                "No assignments found. Please seed assignments first."))
-            return
-        if not students:
-            self.stdout.write(self.style.ERROR(
-                "No students found. Please seed users first."))
+                "No assignments or students found. Please seed assignments and users first."))
             return
 
         self.stdout.write(
@@ -327,10 +318,11 @@ class Command(BaseCommand):
                 file = f"/media/assignment_submissions/{self.faker.file_name(category='office')}" if submission_type == "file" else None
                 text_submission = self.faker.paragraph(
                     nb_sentences=4) if submission_type == "text" else None
-                # Ensure all datetimes are timezone-aware
                 submitted_at_naive = self.faker.date_time_between_dates(
                     datetime_start=assignment.chapter.created_at,
-                    datetime_end=min(timezone.now(), assignment.due_date or timezone.now()))
+                    datetime_end=min(
+                        timezone.now(), assignment.due_date or timezone.now())
+                )
                 submitted_at = timezone.make_aware(submitted_at_naive) if not timezone.is_aware(
                     submitted_at_naive) else submitted_at_naive
                 score = random.randint(50, 100) if random.choice(
@@ -338,22 +330,13 @@ class Command(BaseCommand):
                 feedback = self.faker.sentence(nb_words=10) if score else None
                 graded_at = submitted_at + \
                     timedelta(days=random.randint(1, 5)) if score else None
-                # Ensure graded_at is aware if it exists
                 if graded_at and not timezone.is_aware(graded_at):
                     graded_at = timezone.make_aware(graded_at)
 
-                try:
-                    AssignmentSubmission.objects.get(
-                        assignment=assignment, user=student)
+                if not AssignmentSubmission.objects.filter(assignment=assignment, user=student).exists():
+                    AssignmentSubmission.objects.create(
+                        assignment=assignment, user=student, file=file, text_submission=text_submission,
+                        score=score, feedback=feedback, submitted_at=submitted_at, graded_at=graded_at
+                    )
                     self.stdout.write(
-                        f"Submission by {student.username} for {assignment.title} already exists, skipping...")
-                except ObjectDoesNotExist:
-                    try:
-                        submission = AssignmentSubmission.objects.create(
-                            assignment=assignment, user=student, file=file, text_submission=text_submission,
-                            score=score, feedback=feedback, submitted_at=submitted_at, graded_at=graded_at)
-                        self.stdout.write(
-                            f"Created submission by {student.username} for {assignment.title}")
-                    except Exception as e:
-                        self.stdout.write(self.style.ERROR(
-                            f"Error creating submission for {assignment.title} by {student.username}: {str(e)}"))
+                        f"Created submission by {student.username} for {assignment.title}")

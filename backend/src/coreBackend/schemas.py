@@ -25,11 +25,11 @@ class ErrorResponse(Schema):
 
 class CourseCreateSchema(Schema):
     title: str
-    subject: Optional[str] = None
-    level: Optional[str] = None
+    subject: Optional[str] = ''
+    level: Optional[str] = 'Beginner'
     difficulty_score: float = 1.0
-    description: Optional[str] = None
-    price: Optional[float] = None
+    description: Optional[str] = ''
+    price: Optional[float] = 0.0
     image: Optional[str] = None
     status: Optional[str] = "Draft"
 

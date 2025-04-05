@@ -57,7 +57,7 @@ const CreatePage = () => {
             });
 
             // Assuming the response includes the created course's ID
-            router.push(`/teacher/courses/${response.id}`);
+            router.push(`/dashboard/teachers/courses/${response.id}`);
             toast.success("Course created successfully");
         } catch (error) {
             const apiError = error as { message?: string; status?: number };
@@ -100,7 +100,7 @@ const CreatePage = () => {
                             />
 
                             <div className="flex items-center gap-x-2 w-full justify-between">
-                                <Link href="/teacher/courses">
+                                <Link href="/dashboard/teachers/courses">
                                     <Button type="button" variant={"ghost"} className="dark:text-white dark:hover:bg-gray-700">
                                         Cancel
                                     </Button>
