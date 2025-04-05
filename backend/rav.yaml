@@ -13,7 +13,7 @@ scripts:
     - cd src && python clean_migrations.py
   createapp:
     - cd src && python create_app.py
-  seeding:
+  seed:
     - cd src && python manage.py seed_data
   extract:
     - cd src && python manage.py extract_data_for_ml

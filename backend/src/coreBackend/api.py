@@ -1,24 +1,40 @@
 from typing import Optional, Union, List
-from datetime import datetime
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+from django.contrib.auth.models import Permission
+from django.utils import timezone
+
+
+from ninja import File
+from ninja.files import UploadedFile
+from django.http import HttpRequest
 from ninja_extra import ControllerBase, NinjaExtraAPI, api_controller, http_get, http_post, http_put, http_delete, route
 from ninja_jwt.controller import NinjaJWTDefaultController
-from django.contrib.auth.models import Permission
 from ninja.errors import HttpError
+from ninja_extra import api_controller, http_get
 
+from apps.users.models import CustomUser
 from apps.core.utils.recommendation import recommend_courses
 from apps.users.models import CustomUser, Profile
 from apps.users.schemas import ProfileSchema, UserDetailSchema, RegisterSchema
 from apps.core.permissions import is_admin, has_user_permission
-from apps.core.models import Course, Enrollment, UserInteraction, LearningProgress
+from apps.core.models import (
+    Course, Enrollment, UserInteraction, LearningProgress,
+    Assignment, AssignmentSubmission, Chapter, Enrollment,
+    Course, LearningProgress
+)
 from apps.core.permissions import (
     is_admin as is_admin_core, is_teacher, is_student, has_course_permission,
     has_enrollment_permission, has_interaction_permission, has_progress_permission
 )
 from .schemas import (
-    DebugJWTAuth, EnrollmentCreateSchema, CourseSchema,
-    CourseCreateSchema, CourseCreateSchema, EnrollmentSchema,
+    AssignmentCreateSchema, AssignmentSchema, AssignmentSubmissionCreateSchema,
+    AssignmentSubmissionSchema, AssignmentSubmissionUpdateSchema, ChapterCreateSchema,
+    ChapterSchema, CourseUpdateSchema, DebugJWTAuth, EnrollmentCreateSchema, CourseSchema,
+    CourseCreateSchema, CourseCreateSchema, EnrollmentSchema, ImageUploadSchema,
     UserInteractionSchema, UserInteractionCreateSchema, LearningProgressSchema,
-    LearningProgressUpdateSchema, PersonalizedRecommendationResponse
+    LearningProgressUpdateSchema, PersonalizedRecommendationResponse,
+    DashboardResponseSchema, StudentDashboardSchema, AdminDashboardSchema, TeacherDashboardSchema
 )
 
 # Create a single NinjaExtraAPI instance
@@ -29,6 +45,137 @@ auth = DebugJWTAuth()
 
 # Register the JWT controller for token endpoints (/api/token/pair, /api/token/refresh)
 api.register_controllers(NinjaJWTDefaultController)
+
+
+def calculate_percentage_change(current: float, previous: float) -> float:
+    if previous == 0:
+        return 100.0 if current > 0 else 0.0
+    return ((current - previous) / previous) * 100
+
+
+def user_to_schema(user: CustomUser) -> UserDetailSchema:
+    profile = getattr(user, "profile", None)
+    return UserDetailSchema(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        role=user.role,
+        preferred_subject=user.preferred_subject,
+        profile=ProfileSchema(
+            bio=profile.bio if profile else None,
+            website=profile.website if profile else None,
+            gender=profile.gender if profile else None,
+            date_of_birth=profile.date_of_birth.isoformat(
+            ) if profile and profile.date_of_birth else None,
+            phone_number=profile.phone_number if profile else None,
+            account_status=profile.account_status if profile else "Active",
+            joined_date=profile.joined_date.isoformat() if profile else None,
+        )
+    )
+
+
+def course_to_schema(course: Course) -> CourseSchema:
+    return CourseSchema(
+        id=course.id,
+        title=course.title,
+        subject=course.subject,
+        level=course.level,
+        price=float(course.price) if course.price is not None else None,
+        image=course.image.url if course.image else None,
+        difficulty_score=course.difficulty_score,
+        description=course.description,
+        status=course.status,
+        created_by=user_to_schema(
+            course.created_by) if course.created_by else None,
+        created_at=course.created_at.isoformat(),
+        updated_at=course.updated_at.isoformat(),
+    )
+
+
+def chapter_to_schema(chapter: Chapter) -> ChapterSchema:
+    return ChapterSchema(
+        id=chapter.id,
+        course=course_to_schema(chapter.course),
+        title=chapter.title,
+        order=chapter.order,
+        description=chapter.description,
+        video=chapter.video.url if chapter.video else None,
+        pdf=chapter.pdf.url if chapter.pdf else None,
+        text_content=chapter.text_content,
+        created_at=chapter.created_at.isoformat(),
+        updated_at=chapter.updated_at.isoformat(),
+    )
+
+
+def assignment_to_schema(assignment: Assignment) -> AssignmentSchema:
+    return AssignmentSchema(
+        id=assignment.id,
+        chapter=chapter_to_schema(assignment.chapter),
+        title=assignment.title,
+        description=assignment.description,
+        max_score=assignment.max_score,
+        due_date=assignment.due_date.isoformat() if assignment.due_date else None,
+        created_at=assignment.created_at.isoformat(),
+        updated_at=assignment.updated_at.isoformat(),
+    )
+
+
+def submission_to_schema(submission: AssignmentSubmission) -> AssignmentSubmissionSchema:
+    return AssignmentSubmissionSchema(
+        id=submission.id,
+        assignment=assignment_to_schema(submission.assignment),
+        user=user_to_schema(submission.user),
+        file=submission.file.url if submission.file else None,
+        text_submission=submission.text_submission,
+        score=submission.score,
+        feedback=submission.feedback,
+        submitted_at=submission.submitted_at.isoformat(),
+        graded_at=submission.graded_at.isoformat() if submission.graded_at else None,
+    )
+
+
+def enrollment_to_schema(enrollment: Enrollment) -> EnrollmentSchema:
+    # Fetch progress from LearningProgress
+    progress_obj = LearningProgress.objects.filter(
+        user=enrollment.user, course=enrollment.course).first()
+    progress = progress_obj.progress if progress_obj else 0.0
+
+    # Fetch completed status from UserInteraction
+    completed = UserInteraction.objects.filter(
+        user=enrollment.user,
+        course=enrollment.course,
+        interaction_type="completed"
+    ).exists()
+
+    return EnrollmentSchema(
+        id=enrollment.id,
+        user=user_to_schema(enrollment.user),
+        course=course_to_schema(enrollment.course),
+        enrolled_at=enrollment.enrolled_at.isoformat(),
+        progress=progress,
+        completed=completed,
+    )
+
+
+def progress_to_schema(progress: LearningProgress) -> LearningProgressSchema:
+    return LearningProgressSchema(
+        id=progress.id,
+        user=user_to_schema(progress.user),
+        course=course_to_schema(progress.course),
+        progress=progress.progress,
+        last_accessed=progress.last_accessed.isoformat(),
+    )
+
+
+def interaction_to_schema(interaction: UserInteraction) -> UserInteractionSchema:
+    return UserInteraction(
+        id=interaction.id,
+        user=user_to_schema(interaction.user),
+        course=course_to_schema(interaction.course),
+        interaction_type=interaction.interaction_type,
+        rating=interaction.rating,
+        timestamp=interaction.timestamp.isoformat(),
+    )
 
 
 # Authentication Endpoints (from apps.users.api)
@@ -92,75 +239,182 @@ class AuthController:
         # With JWT, logout is typically handled client-side by removing the token
         return {"message": "Logged out successfully"}
 
+
+@api_controller("/dashboard")
+class DashboardController(ControllerBase):
+    def __init__(self):
+        self.auth = auth
+
+    def calculate_percentage_change(self, current: float, previous: float) -> float:
+        if previous == 0:
+            return 100.0 if current > 0 else 0.0
+        return ((current - previous) / previous) * 100
+
+    @http_get("", response=DashboardResponseSchema, auth=auth)
+    def get_dashboard_data(self, request):
+        if not request.user.is_authenticated:
+            raise HttpError(401, "Unauthorized")
+
+        role = request.user.role  # Assuming CustomUser has a role field
+        current_date = timezone.now()
+        # Define the start of the current month and previous month
+        current_month_start = current_date.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0)
+        previous_month_start = current_month_start - relativedelta(months=1)
+        previous_month_end = current_month_start - timedelta(seconds=1)
+
+        dashboard_data = {}
+
+        if role == "student":
+            # Current month data
+            current_enrollments = Enrollment.objects.filter(
+                user=request.user,
+                enrolled_at__gte=current_month_start,
+                enrolled_at__lte=current_date
+            ).count()
+            previous_enrollments = Enrollment.objects.filter(
+                user=request.user,
+                enrolled_at__gte=previous_month_start,
+                enrolled_at__lte=previous_month_end
+            ).count()
+            enrollments = Enrollment.objects.filter(user=request.user).count()
+            progress = LearningProgress.objects.filter(user=request.user)
+            current_progress = LearningProgress.objects.filter(
+                user=request.user,
+                last_accessed__gte=current_month_start,
+                last_accessed__lte=current_date
+            )
+            previous_progress = LearningProgress.objects.filter(
+                user=request.user,
+                last_accessed__gte=previous_month_start,
+                last_accessed__lte=previous_month_end
+            )
+            current_avg_progress = (
+                sum(p.progress for p in current_progress) /
+                len(current_progress) if current_progress else 0.0
+            )
+            previous_avg_progress = (
+                sum(p.progress for p in previous_progress) /
+                len(previous_progress) if previous_progress else 0.0
+            )
+            avg_progress = sum(p.progress for p in progress) / \
+                len(progress) if progress else 0.0
+            completed_courses = progress.filter(progress=100).count()
+            current_completed = current_progress.filter(progress=100).count()
+            previous_completed = previous_progress.filter(progress=100).count()
+
+            dashboard_data["student"] = StudentDashboardSchema(
+                enrolledCourses=enrollments,
+                enrolledCoursesChange=self.calculate_percentage_change(
+                    current_enrollments, previous_enrollments),
+                averageProgress=round(avg_progress, 2),
+                averageProgressChange=self.calculate_percentage_change(
+                    current_avg_progress, previous_avg_progress),
+                completedCourses=completed_courses,
+                completedCoursesChange=self.calculate_percentage_change(
+                    current_completed, previous_completed),
+            )
+
+        elif role == "admin":
+            # Current month data
+            current_enrollments = Enrollment.objects.filter(
+                enrolled_at__gte=current_month_start,
+                enrolled_at__lte=current_date
+            ).count()
+            previous_enrollments = Enrollment.objects.filter(
+                enrolled_at__gte=previous_month_start,
+                enrolled_at__lte=previous_month_end
+            ).count()
+            enrollments = Enrollment.objects.count()
+            courses = Course.objects.all()
+            current_courses = Course.objects.filter(
+                created_at__gte=current_month_start,
+                created_at__lte=current_date
+            ).count()
+            previous_courses = Course.objects.filter(
+                created_at__gte=previous_month_start,
+                created_at__lte=previous_month_end
+            ).count()
+            # Assuming $10 per enrollment for revenue
+            total_revenue = enrollments * 10
+            current_revenue = current_enrollments * 10
+            previous_revenue = previous_enrollments * 10
+
+            dashboard_data["admin"] = AdminDashboardSchema(
+                totalRevenue=total_revenue,
+                totalRevenueChange=self.calculate_percentage_change(
+                    current_revenue, previous_revenue),
+                totalEnrollments=enrollments,
+                totalEnrollmentsChange=self.calculate_percentage_change(
+                    current_enrollments, previous_enrollments),
+                monthlyProfitChange=4.5,  # Replace with real calculation if needed
+                activeCourses=courses.count(),
+                activeCoursesChange=self.calculate_percentage_change(
+                    current_courses, previous_courses),
+            )
+
+        elif role == "teacher":
+            # Current month data
+            teacher_courses = Course.objects.filter(created_by=request.user)
+            current_courses = Course.objects.filter(
+                created_by=request.user,
+                created_at__gte=current_month_start,
+                created_at__lte=current_date
+            ).count()
+            previous_courses = Course.objects.filter(
+                created_by=request.user,
+                created_at__gte=previous_month_start,
+                created_at__lte=previous_month_end
+            ).count()
+            enrollments = Enrollment.objects.filter(course__in=teacher_courses)
+            current_enrollments = Enrollment.objects.filter(
+                course__in=teacher_courses,
+                enrolled_at__gte=current_month_start,
+                enrolled_at__lte=current_date
+            ).count()
+            previous_enrollments = Enrollment.objects.filter(
+                course__in=teacher_courses,
+                enrolled_at__gte=previous_month_start,
+                enrolled_at__lte=previous_month_end
+            ).count()
+            progress = LearningProgress.objects.filter(
+                course__in=teacher_courses)
+            current_progress = LearningProgress.objects.filter(
+                course__in=teacher_courses,
+                last_accessed__gte=current_month_start,
+                last_accessed__lte=current_date
+            )
+            previous_progress = LearningProgress.objects.filter(
+                course__in=teacher_courses,
+                last_accessed__gte=previous_month_start,
+                last_accessed__lte=previous_month_end
+            )
+            current_engagement = (
+                sum(p.progress for p in current_progress) /
+                len(current_progress) if current_progress else 0.0
+            )
+            previous_engagement = (
+                sum(p.progress for p in previous_progress) /
+                len(previous_progress) if previous_progress else 0.0
+            )
+            student_engagement = sum(
+                p.progress for p in progress) / len(progress) if progress else 0.0
+
+            dashboard_data["teacher"] = TeacherDashboardSchema(
+                createdCourses=teacher_courses.count(),
+                createdCoursesChange=self.calculate_percentage_change(
+                    current_courses, previous_courses),
+                studentEngagement=round(student_engagement, 2),
+                studentEngagementChange=self.calculate_percentage_change(
+                    current_engagement, previous_engagement),
+                enrollmentsInCourses=enrollments.count(),
+                enrollmentsInCoursesChange=self.calculate_percentage_change(
+                    current_enrollments, previous_enrollments),
+            )
+
+        return dashboard_data
+
 # User Endpoints (from apps.users.api)
-
-
-def user_to_schema(user: CustomUser) -> UserDetailSchema:
-    profile = getattr(user, "profile", None)
-    return UserDetailSchema(
-        id=user.id,
-        email=user.email,
-        username=user.username,
-        role=user.role,
-        preferred_subject=user.preferred_subject,
-        profile=ProfileSchema(
-            bio=profile.bio if profile else None,
-            website=profile.website if profile else None,
-            gender=profile.gender if profile else None,
-            date_of_birth=profile.date_of_birth.isoformat(
-            ) if profile and profile.date_of_birth else None,
-            phone_number=profile.phone_number if profile else None,
-            account_status=profile.account_status if profile else "Active",
-            joined_date=profile.joined_date.isoformat(
-            ) if profile else None,
-        )
-    )
-
-
-def course_to_schema(course: Course) -> CourseSchema:
-    return CourseSchema(
-        id=course.id,
-        title=course.title,
-        subject=course.subject,
-        level=course.level,
-        difficulty_score=course.difficulty_score,
-        description=course.description,
-        created_by=user_to_schema(
-            course.created_by) if course.created_by else None,
-        created_at=course.created_at.isoformat(),
-        updated_at=course.updated_at.isoformat(),
-    )
-
-
-def enrollment_to_schema(enrollment: Enrollment) -> EnrollmentSchema:
-    return EnrollmentSchema(
-        id=enrollment.id,
-        user=user_to_schema(enrollment.user),
-        course=course_to_schema(enrollment.course),
-        enrolled_at=enrollment.enrolled_at.isoformat(),
-    )
-
-
-def progress_to_schema(progress: LearningProgress) -> LearningProgressSchema:
-    return LearningProgressSchema(
-        id=progress.id,
-        user=user_to_schema(progress.user),
-        course=course_to_schema(progress.course),
-        progress=progress.progress,
-        last_accessed=progress.last_accessed.isoformat(),
-    )
-
-
-def interaction_to_schema(interaction: UserInteraction) -> UserInteractionSchema:
-    return UserInteraction(
-        id=interaction.id,
-        user=user_to_schema(interaction.user),
-        course=course_to_schema(interaction.course),
-        interaction_type=interaction.interaction_type,
-        rating=interaction.rating,
-        timestamp=interaction.timestamp.isoformat(),
-    )
-
 
 @api_controller("/users")
 class UserController(ControllerBase):
@@ -226,7 +480,6 @@ class UserController(ControllerBase):
 
 # Course Endpoints (from apps.core.api)
 
-
 @api_controller("/courses")
 class CourseController:
     @http_get("", auth=auth, response=List[CourseSchema])
@@ -253,16 +506,35 @@ class CourseController:
             level=payload.level,
             difficulty_score=payload.difficulty_score,
             description=payload.description,
+            price=payload.price,
+            image=payload.image,
+            status=payload.status,
             created_by=request.user
         )
         return course_to_schema(course)
 
-    @http_put("/{course_id}", auth=auth, response=CourseSchema)
-    def update_course(self, request, course_id: int, payload: CourseCreateSchema):
+    @http_post("/{course_id}/upload-image", auth=auth, response=CourseSchema)
+    def upload_course_image(self, request, course_id: int, image: UploadedFile = File(None)):
+        print(f"Received image: {image}")
         course = Course.objects.get(id=course_id)
         if not has_course_permission(request, "PUT", course):
             raise HttpError(403, "Permission denied")
-        for attr, value in payload.dict().items():
+        if image:
+            old_image_path = course.image.path if course.image else "No previous image"
+            course.image.save(image.name, image, save=True)
+            print(f"Old image path: {old_image_path}")
+            print(f"New image saved to: {course.image.path}")
+            print(f"DB path: {course.image.name}")
+        course.save()
+        return course_to_schema(course)
+
+    @http_put("/{course_id}", auth=auth, response=CourseSchema)
+    def update_course(self, request, course_id: int, payload: CourseUpdateSchema):
+        course = Course.objects.get(id=course_id)
+        if not has_course_permission(request, "PUT", course):
+            raise HttpError(403, "Permission denied")
+        # Update only the fields provided in the payload
+        for attr, value in payload.dict(exclude_unset=True).items():
             setattr(course, attr, value)
         course.save()
         return course_to_schema(course)
@@ -273,6 +545,180 @@ class CourseController:
         if not has_course_permission(request, "DELETE", course):
             raise HttpError(403, "Permission denied")
         course.delete()
+        return {"success": True}
+
+
+@api_controller("/chapters")
+class ChapterController(ControllerBase):
+    @http_get("", auth=auth, response=List[ChapterSchema])
+    def list_chapters(self, request, course_id: Optional[int] = None):
+        # Adjust permission as needed
+        if not has_course_permission(request, "GET"):
+            raise HttpError(403, "Permission denied")
+        chapters = Chapter.objects.filter(
+            course_id=course_id) if course_id else Chapter.objects.all()
+        return [chapter_to_schema(chapter) for chapter in chapters]
+
+    @http_get("/{chapter_id}", auth=auth, response=ChapterSchema)
+    def get_chapter(self, request, chapter_id: int):
+        chapter = Chapter.objects.get(id=chapter_id)
+        if not has_course_permission(request, "GET", chapter.course):
+            raise HttpError(403, "Permission denied")
+        return chapter_to_schema(chapter)
+
+    @http_post("", auth=auth, response=ChapterSchema)
+    def create_chapter(self, request, payload: ChapterCreateSchema):
+        if not has_course_permission(request, "POST"):
+            raise HttpError(403, "Permission denied")
+        course = Course.objects.get(id=payload.course_id)
+        if course.created_by != request.user and not is_admin(request):
+            raise HttpError(
+                403, "Only the course creator or admin can add chapters")
+        chapter = Chapter.objects.create(
+            course=course, title=payload.title, order=payload.order, description=payload.description,
+            video=payload.video, pdf=payload.pdf, text_content=payload.text_content)
+        return chapter_to_schema(chapter)
+
+    @http_put("/{chapter_id}", auth=auth, response=ChapterSchema)
+    def update_chapter(self, request, chapter_id: int, payload: ChapterCreateSchema):
+        chapter = Chapter.objects.get(id=chapter_id)
+        if not has_course_permission(request, "PUT", chapter.course):
+            raise HttpError(403, "Permission denied")
+        if chapter.course.created_by != request.user and not is_admin(request):
+            raise HttpError(
+                403, "Only the course creator or admin can edit chapters")
+        chapter.course = Course.objects.get(id=payload.course_id)
+        for attr, value in payload.dict(exclude={'course_id'}).items():
+            setattr(chapter, attr, value)
+        chapter.save()
+        return chapter_to_schema(chapter)
+
+    @http_delete("/{chapter_id}", auth=auth)
+    def delete_chapter(self, request, chapter_id: int):
+        chapter = Chapter.objects.get(id=chapter_id)
+        if not has_course_permission(request, "DELETE", chapter.course):
+            raise HttpError(403, "Permission denied")
+        if chapter.course.created_by != request.user and not is_admin(request):
+            raise HttpError(
+                403, "Only the course creator or admin can delete chapters")
+        chapter.delete()
+        return {"success": True}
+
+
+@api_controller("/assignments")
+class AssignmentController(ControllerBase):
+    @http_get("", auth=auth, response=List[AssignmentSchema])
+    def list_assignments(self, request, chapter_id: Optional[int] = None):
+        # Adjust permission as needed
+        if not has_course_permission(request, "GET"):
+            raise HttpError(403, "Permission denied")
+        assignments = Assignment.objects.filter(
+            chapter_id=chapter_id) if chapter_id else Assignment.objects.all()
+        return [assignment_to_schema(assignment) for assignment in assignments]
+
+    @http_get("/{assignment_id}", auth=auth, response=AssignmentSchema)
+    def get_assignment(self, request, assignment_id: int):
+        assignment = Assignment.objects.get(id=assignment_id)
+        if not has_course_permission(request, "GET", assignment.chapter.course):
+            raise HttpError(403, "Permission denied")
+        return assignment_to_schema(assignment)
+
+    @http_post("", auth=auth, response=AssignmentSchema)
+    def create_assignment(self, request, payload: AssignmentCreateSchema):
+        if not has_course_permission(request, "POST"):
+            raise HttpError(403, "Permission denied")
+        chapter = Chapter.objects.get(id=payload.chapter_id)
+        if chapter.course.created_by != request.user and not is_admin(request):
+            raise HttpError(
+                403, "Only the course creator or admin can add assignments")
+        assignment = Assignment.objects.create(
+            chapter=chapter, title=payload.title, description=payload.description,
+            max_score=payload.max_score, due_date=payload.due_date)
+        return assignment_to_schema(assignment)
+
+    @http_put("/{assignment_id}", auth=auth, response=AssignmentSchema)
+    def update_assignment(self, request, assignment_id: int, payload: AssignmentCreateSchema):
+        assignment = Assignment.objects.get(id=assignment_id)
+        if not has_course_permission(request, "PUT", assignment.chapter.course):
+            raise HttpError(403, "Permission denied")
+        if assignment.chapter.course.created_by != request.user and not is_admin(request):
+            raise HttpError(
+                403, "Only the course creator or admin can edit assignments")
+        assignment.chapter = Chapter.objects.get(id=payload.chapter_id)
+        for attr, value in payload.dict(exclude={'chapter_id'}).items():
+            setattr(assignment, attr, value)
+        assignment.save()
+        return assignment_to_schema(assignment)
+
+    @http_delete("/{assignment_id}", auth=auth)
+    def delete_assignment(self, request, assignment_id: int):
+        assignment = Assignment.objects.get(id=assignment_id)
+        if not has_course_permission(request, "DELETE", assignment.chapter.course):
+            raise HttpError(403, "Permission denied")
+        if assignment.chapter.course.created_by != request.user and not is_admin(request):
+            raise HttpError(
+                403, "Only the course creator or admin can delete assignments")
+        assignment.delete()
+        return {"success": True}
+
+
+@api_controller("/submissions")
+class AssignmentSubmissionController(ControllerBase):
+    @http_get("", auth=auth, response=List[AssignmentSubmissionSchema])
+    def list_submissions(self, request, assignment_id: Optional[int] = None):
+        if not (is_student(request) or is_teacher(request) or is_admin(request)):
+            raise HttpError(403, "Permission denied")
+        if is_student(request):
+            submissions = AssignmentSubmission.objects.filter(
+                user=request.user)
+        elif assignment_id:
+            submissions = AssignmentSubmission.objects.filter(
+                assignment_id=assignment_id)
+        else:
+            submissions = AssignmentSubmission.objects.all()
+        return [submission_to_schema(submission) for submission in submissions]
+
+    @http_get("/{submission_id}", auth=auth, response=AssignmentSubmissionSchema)
+    def get_submission(self, request, submission_id: int):
+        submission = AssignmentSubmission.objects.get(id=submission_id)
+        if submission.user != request.user and not (is_teacher(request) or is_admin(request)):
+            raise HttpError(403, "Permission denied")
+        return submission_to_schema(submission)
+
+    @http_post("", auth=auth, response=AssignmentSubmissionSchema)
+    def create_submission(self, request, payload: AssignmentSubmissionCreateSchema):
+        if not is_student(request):
+            raise HttpError(403, "Only students can submit assignments")
+        assignment = Assignment.objects.get(id=payload.assignment_id)
+        if AssignmentSubmission.objects.filter(assignment=assignment, user=request.user).exists():
+            raise HttpError(400, "You have already submitted this assignment")
+        submission = AssignmentSubmission.objects.create(
+            assignment=assignment, user=request.user, file=payload.file, text_submission=payload.text_submission)
+        return submission_to_schema(submission)
+
+    @http_put("/{submission_id}", auth=auth, response=AssignmentSubmissionSchema)
+    def update_submission(self, request, submission_id: int, payload: AssignmentSubmissionUpdateSchema):
+        submission = AssignmentSubmission.objects.get(id=submission_id)
+        if not (is_teacher(request) or is_admin(request)):
+            raise HttpError(
+                403, "Only teachers or admins can grade submissions")
+        if submission.assignment.chapter.course.created_by != request.user and not is_admin(request):
+            raise HttpError(
+                403, "Only the course creator or admin can grade this submission")
+        if payload.score is not None:
+            submission.score = payload.score
+            submission.graded_at = timezone.now()
+        if payload.feedback is not None:
+            submission.feedback = payload.feedback
+        submission.save()
+        return submission_to_schema(submission)
+
+    @http_delete("/{submission_id}", auth=auth)
+    def delete_submission(self, request, submission_id: int):
+        submission = AssignmentSubmission.objects.get(id=submission_id)
+        if submission.user != request.user and not (is_teacher(request) or is_admin(request)):
+            raise HttpError(403, "Permission denied")
+        submission.delete()
         return {"success": True}
 
 # Enrollment Endpoints (from apps.core.api)
@@ -443,5 +889,6 @@ api.register_controllers(
     EnrollmentController,
     UserInteractionController,
     LearningProgressController,
-    RecommendationController
+    RecommendationController,
+    DashboardController
 )

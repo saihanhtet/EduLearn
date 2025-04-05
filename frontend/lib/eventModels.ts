@@ -1,10 +1,9 @@
 // types.ts
 
-// Course interfaces
 
 
 export interface CourseGetProps {
-    _id: number;
+    id: number;
     title: string;
     subject: string;
     level: string;
@@ -12,6 +11,7 @@ export interface CourseGetProps {
     description: string;
     price?: number;
     image?: string;
+    status?: string;
     created_by: {
         id: number;
         email: string;
@@ -20,6 +20,9 @@ export interface CourseGetProps {
     };
     created_at: string;
     updated_at: string;
+    enrolled_at?: string; // From EnrollmentSchema
+    progress?: number; // From EnrollmentSchema (LearningProgress)
+    completed?: boolean; // From EnrollmentSchema (UserInteraction)
 }
 
 export interface UserDetail {
@@ -77,10 +80,11 @@ export interface LoginResponse {
 
 export interface CourseCreateUpdateProps {
     title: string;
-    subject: string;
-    level: string;
-    difficulty_score: number;
-    description: string;
+    subject?: string;
+    level?: string;
+    status?: string;
+    difficulty_score?: number;
+    description?: string;
     price?: number;
     image?: string;
 }

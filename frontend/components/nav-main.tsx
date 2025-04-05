@@ -1,6 +1,5 @@
 "use client"
 
-import { type Icon } from "@tabler/icons-react"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -9,8 +8,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Separator } from "./ui/separator"
-import { useRouter, usePathname } from "next/navigation"
+import { type Icon } from "@tabler/icons-react"
+import { usePathname, useRouter } from "next/navigation"
 
 export function NavMain({
   items,

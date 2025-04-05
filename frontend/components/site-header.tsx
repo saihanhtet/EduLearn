@@ -1,7 +1,5 @@
-import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import Link from "next/link"
 
 export function SiteHeader({ title, is_student }: { title: string, is_student: boolean }) {
   return (
@@ -13,7 +11,7 @@ export function SiteHeader({ title, is_student }: { title: string, is_student: b
           className="mx-2 data-[orientation=vertical]:h-4"
         />
         <h1 className="text-base font-medium">{title}</h1>
-        <div className="ml-auto flex items-center gap-2">
+        {/* <div className="ml-auto flex items-center gap-2">
           {!is_student && (
             <Button variant="ghost" asChild size="icon" className="hidden sm:flex w-auto">
               <Link
@@ -24,7 +22,7 @@ export function SiteHeader({ title, is_student }: { title: string, is_student: b
               </Link>
             </Button>
           )}
-        </div>
+        </div> */}
       </div>
     </header>
   )

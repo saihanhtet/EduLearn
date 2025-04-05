@@ -1,9 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Markazi+Text:wght@400..700&display=swap');
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -115,6 +112,7 @@
   --sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -123,6 +121,7 @@
     @apply bg-background text-foreground;
   }
 }
+
 
 .font-geist {
   font-family: "Geist", sans-serif;

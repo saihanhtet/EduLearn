@@ -14,12 +14,7 @@ id,title,subject,level,difficulty_score,description,created_by_id
 13,World History,History,Beginner,2.0,Overview of world history,4
 14,Ancient Civilizations,History,Intermediate,3.0,Study of ancient civilizations,4
 15,Modern History,History,Advanced,4.0,Modern historical events,4
-16,European History,History,Intermediate,3.0,History of Europe,4
-17,Intro to Literature,Literature,Beginner,2.0,Introduction to literary studies,5
-18,Shakespeare Studies,Literature,Intermediate,3.5,Works of Shakespeare,5
-19,Modern Poetry,Literature,Advanced,4.0,Analysis of modern poetry,5
-20,American Literature,Literature,Intermediate,3.0,American literary works,5
-21,Intro to Programming,Computer Science,Beginner,2.5,Basics of programming,6
-22,Data Structures,Computer Science,Intermediate,3.5,Fundamentals of data structures,6
-23,Machine Learning,Computer Science,Advanced,5.0,Introduction to machine learning,6
-24,Algorithms,Computer Science,Intermediate,4.0,Study of algorithms,6
+16,Intro to Programming,Computer Science,Beginner,2.5,Basics of programming,6
+17,Data Structures,Computer Science,Intermediate,3.5,Fundamentals of data structures,6
+18,Machine Learning,Computer Science,Advanced,5.0,Introduction to machine learning,6
+19,Algorithms,Computer Science,Intermediate,4.0,Study of algorithms,6

@@ -1,5 +1,7 @@
+// components/dashboard-card.tsx
 "use client";
 
+import { useEffect, useState } from "react";
 import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,72 +12,45 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { useEffect, useState } from "react";
-import { apiService } from "@/lib/apiService";
-import { CourseGetProps, EnrollmentGetProps, ProgressGetProps, UserDetail } from "@/lib/eventModels";
 import { RoleBasedDataTable } from "./role-data-table";
+import { apiService } from "@/lib/apiService";
+import { CourseGetProps, EnrollmentGetProps, ProgressGetProps, UserDetail, DashboardProps } from "@/lib/eventModels";
+import Loader from "@/components/partials/Loader";
 
 // Props interface for role-based data
 interface DashboardCardsProps {
     role: "student" | "admin" | "teacher";
-    data: {
-        student?: {
-            enrolledCourses: number;
-            averageProgress: number;
-            completedCourses: number;
-        };
-        admin?: {
-            totalRevenue: number;
-            totalEnrollments: number;
-            monthlyProfitChange: number;
-            activeCourses: number;
-        };
-        teacher?: {
-            createdCourses: number;
-            studentEngagement: number;
-            enrollmentsInCourses: number;
-        };
-    };
 }
 
-export function DashboardData({ role }: { role: "student" | "admin" | "teacher" }) {
-    const [dashboardData, setDashboardData] = useState<DashboardCardsProps["data"]>({});
+export function DashboardData({ role }: DashboardCardsProps) {
+    const [dashboardData, setDashboardData] = useState<DashboardProps>({});
     const [tableData, setTableData] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [user, setUser] = useState<UserDetail | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
+            setIsLoading(true);
             try {
+                // Fetch the current user to get their ID for the teacher role
+                const userData = await apiService.getMe<UserDetail>("users");
+                setUser(userData);
+                // Fetch dashboard data
+                const data = await apiService.getDashboard<DashboardProps>();
+                setDashboardData(data);
+                // Fetch table data based on the role
                 if (role === "student") {
                     const enrollments = await apiService.getAll<EnrollmentGetProps>("enrollments");
-                    const progress = await apiService.getAll<ProgressGetProps>("progress");
-                    setDashboardData({
-                        student: {
-                            enrolledCourses: enrollments.length,
-                            averageProgress: Number(
-                                (progress.reduce((sum: number, p: any) => sum + p.progress, 0) / progress.length || 0).toFixed(2)
-                            ),
-                            completedCourses: progress.filter((p: any) => p.progress === 100).length,
-                        },
-                    });
                     setTableData(
                         enrollments.map((e: any) => ({
                             id: e.id,
                             courseTitle: e.course.title,
-                            progress: progress.find((p: any) => p.course.id === e.course.id)?.progress || 0,
+                            progress: e.progress || 0,
                             enrolledAt: e.enrolled_at,
                         }))
                     );
                 } else if (role === "admin") {
                     const enrollments = await apiService.getAll<EnrollmentGetProps>("enrollments");
-                    const courses = await apiService.getAll<CourseGetProps>("courses");
-                    setDashboardData({
-                        admin: {
-                            totalRevenue: enrollments.length * 10, // Example: $10 per enrollment
-                            totalEnrollments: enrollments.length,
-                            monthlyProfitChange: 4.5, // Replace with real calculation
-                            activeCourses: courses.length,
-                        },
-                    });
                     setTableData(
                         enrollments.map((e: any) => ({
                             id: e.id,
@@ -86,23 +61,10 @@ export function DashboardData({ role }: { role: "student" | "admin" | "teacher" 
                         }))
                     );
                 } else if (role === "teacher") {
-                    const courses = await apiService.getAll<CourseGetProps>("courses"); // Filter by created_by in real app
+                    const courses = await apiService.getAll<CourseGetProps>("courses");
                     const enrollments = await apiService.getAll<EnrollmentGetProps>("enrollments");
                     const progress = await apiService.getAll<ProgressGetProps>("progress");
-                    const teacherCourses = courses.filter(
-                        async (c: any) => c.created_by.id === (await apiService.getMe<UserDetail>('users')).id
-                    );
-                    setDashboardData({
-                        teacher: {
-                            createdCourses: teacherCourses.length,
-                            studentEngagement: Number(
-                                (progress.reduce((sum: number, p: any) => sum + p.progress, 0) / progress.length || 0).toFixed(2)
-                            ),
-                            enrollmentsInCourses: enrollments.filter((e: any) =>
-                                teacherCourses.some((c: any) => c.id === e.course.id)
-                            ).length,
-                        },
-                    });
+                    const teacherCourses = courses.filter((c: any) => c.created_by.id === userData.id);
                     setTableData(
                         teacherCourses.map((c: any) => {
                             const courseEnrollments = enrollments.filter((e: any) => e.course.id === c.id);
@@ -125,10 +87,23 @@ export function DashboardData({ role }: { role: "student" | "admin" | "teacher" 
                 }
             } catch (error) {
                 console.error("Failed to fetch dashboard data:", error);
+                setDashboardData({});
+                setTableData([]);
+            } finally {
+                setIsLoading(false);
             }
         };
+
         fetchData();
     }, [role]);
+
+    if (isLoading) {
+        return (
+            <div className="h-[80vh] w-[70vw] flex justify-center items-center">
+                <Loader />
+            </div>
+        );
+    }
 
     return (
         <div>
@@ -140,7 +115,38 @@ export function DashboardData({ role }: { role: "student" | "admin" | "teacher" 
     );
 }
 
-export function CustomCards({ role, data }: DashboardCardsProps) {
+interface CustomCardsProps {
+    role: "student" | "admin" | "teacher";
+    data: {
+        student?: {
+            enrolledCourses: number;
+            enrolledCoursesChange: number;
+            averageProgress: number;
+            averageProgressChange: number;
+            completedCourses: number;
+            completedCoursesChange: number;
+        };
+        admin?: {
+            totalRevenue: number;
+            totalRevenueChange: number;
+            totalEnrollments: number;
+            totalEnrollmentsChange: number;
+            monthlyProfitChange: number;
+            activeCourses: number;
+            activeCoursesChange: number;
+        };
+        teacher?: {
+            createdCourses: number;
+            createdCoursesChange: number;
+            studentEngagement: number;
+            studentEngagementChange: number;
+            enrollmentsInCourses: number;
+            enrollmentsInCoursesChange: number;
+        };
+    };
+}
+
+export function CustomCards({ role, data }: CustomCardsProps) {
     return (
         <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
             {role === "student" && (
@@ -153,14 +159,24 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    <IconTrendingUp />
-                                    +{Math.round(Math.random() * 10)}%
+                                    {data.student?.enrolledCoursesChange >= 0 ? (
+                                        <IconTrendingUp />
+                                    ) : (
+                                        <IconTrendingDown />
+                                    )}
+                                    {data.student?.enrolledCoursesChange >= 0 ? "+" : ""}
+                                    {Math.round(data.student?.enrolledCoursesChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
                         <CardFooter className="flex-col items-start gap-1.5 text-sm">
                             <div className="line-clamp-1 flex gap-2 font-medium">
-                                Active registrations <IconTrendingUp className="size-4" />
+                                Active registrations{" "}
+                                {data.student?.enrolledCoursesChange >= 0 ? (
+                                    <IconTrendingUp className="size-4" />
+                                ) : (
+                                    <IconTrendingDown className="size-4" />
+                                )}
                             </div>
                             <div className="text-muted-foreground">
                                 Courses you’re currently enrolled in
@@ -175,13 +191,13 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    {data.student?.averageProgress && data.student.averageProgress > 50 ? (
+                                    {data.student?.averageProgressChange >= 0 ? (
                                         <IconTrendingUp />
                                     ) : (
                                         <IconTrendingDown />
                                     )}
-                                    {data.student?.averageProgress && data.student.averageProgress > 50 ? "+" : "-"}
-                                    {Math.round(Math.random() * 5)}%
+                                    {data.student?.averageProgressChange >= 0 ? "+" : ""}
+                                    {Math.round(data.student?.averageProgressChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
@@ -190,7 +206,7 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                                 {data.student?.averageProgress && data.student.averageProgress > 50
                                     ? "Good progress"
                                     : "Progress needs attention"}{" "}
-                                {data.student?.averageProgress && data.student.averageProgress > 50 ? (
+                                {data.student?.averageProgressChange >= 0 ? (
                                     <IconTrendingUp className="size-4" />
                                 ) : (
                                     <IconTrendingDown className="size-4" />
@@ -209,14 +225,24 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    <IconTrendingUp />
-                                    +{Math.round(Math.random() * 3)}%
+                                    {data.student?.completedCoursesChange >= 0 ? (
+                                        <IconTrendingUp />
+                                    ) : (
+                                        <IconTrendingDown />
+                                    )}
+                                    {data.student?.completedCoursesChange >= 0 ? "+" : ""}
+                                    {Math.round(data.student?.completedCoursesChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
                         <CardFooter className="flex-col items-start gap-1.5 text-sm">
                             <div className="line-clamp-1 flex gap-2 font-medium">
-                                Achievements unlocked <IconTrendingUp className="size-4" />
+                                Achievements unlocked{" "}
+                                {data.student?.completedCoursesChange >= 0 ? (
+                                    <IconTrendingUp className="size-4" />
+                                ) : (
+                                    <IconTrendingDown className="size-4" />
+                                )}
                             </div>
                             <div className="text-muted-foreground">
                                 Courses fully completed
@@ -236,14 +262,24 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    <IconTrendingUp />
-                                    +12.5%
+                                    {data.admin?.totalRevenueChange >= 0 ? (
+                                        <IconTrendingUp />
+                                    ) : (
+                                        <IconTrendingDown />
+                                    )}
+                                    {data.admin?.totalRevenueChange >= 0 ? "+" : ""}
+                                    {Math.round(data.admin?.totalRevenueChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
                         <CardFooter className="flex-col items-start gap-1.5 text-sm">
                             <div className="line-clamp-1 flex gap-2 font-medium">
-                                Revenue up this month <IconTrendingUp className="size-4" />
+                                Revenue trend this month{" "}
+                                {data.admin?.totalRevenueChange >= 0 ? (
+                                    <IconTrendingUp className="size-4" />
+                                ) : (
+                                    <IconTrendingDown className="size-4" />
+                                )}
                             </div>
                             <div className="text-muted-foreground">
                                 Income from course enrollments
@@ -258,14 +294,24 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    <IconTrendingUp />
-                                    +{Math.round(Math.random() * 10)}%
+                                    {data.admin?.totalEnrollmentsChange >= 0 ? (
+                                        <IconTrendingUp />
+                                    ) : (
+                                        <IconTrendingDown />
+                                    )}
+                                    {data.admin?.totalEnrollmentsChange >= 0 ? "+" : ""}
+                                    {Math.round(data.admin?.totalEnrollmentsChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
                         <CardFooter className="flex-col items-start gap-1.5 text-sm">
                             <div className="line-clamp-1 flex gap-2 font-medium">
-                                Enrollment growth <IconTrendingUp className="size-4" />
+                                Enrollment growth{" "}
+                                {data.admin?.totalEnrollmentsChange >= 0 ? (
+                                    <IconTrendingUp className="size-4" />
+                                ) : (
+                                    <IconTrendingDown className="size-4" />
+                                )}
                             </div>
                             <div className="text-muted-foreground">
                                 Total students enrolled this period
@@ -286,7 +332,7 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                                         <IconTrendingDown />
                                     )}
                                     {data.admin?.monthlyProfitChange && data.admin.monthlyProfitChange > 0 ? "+" : ""}
-                                    {data.admin?.monthlyProfitChange ?? 0}%
+                                    {Math.round(data.admin?.monthlyProfitChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
@@ -314,14 +360,24 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    <IconTrendingUp />
-                                    +{Math.round(Math.random() * 5)}%
+                                    {data.admin?.activeCoursesChange >= 0 ? (
+                                        <IconTrendingUp />
+                                    ) : (
+                                        <IconTrendingDown />
+                                    )}
+                                    {data.admin?.activeCoursesChange >= 0 ? "+" : ""}
+                                    {Math.round(data.admin?.activeCoursesChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
                         <CardFooter className="flex-col items-start gap-1.5 text-sm">
                             <div className="line-clamp-1 flex gap-2 font-medium">
-                                Course catalog growing <IconTrendingUp className="size-4" />
+                                Course catalog growth{" "}
+                                {data.admin?.activeCoursesChange >= 0 ? (
+                                    <IconTrendingUp className="size-4" />
+                                ) : (
+                                    <IconTrendingDown className="size-4" />
+                                )}
                             </div>
                             <div className="text-muted-foreground">
                                 Number of active courses
@@ -341,14 +397,24 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    <IconTrendingUp />
-                                    +{Math.round(Math.random() * 5)}%
+                                    {data.teacher?.createdCoursesChange >= 0 ? (
+                                        <IconTrendingUp />
+                                    ) : (
+                                        <IconTrendingDown />
+                                    )}
+                                    {data.teacher?.createdCoursesChange >= 0 ? "+" : ""}
+                                    {Math.round(data.teacher?.createdCoursesChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
                         <CardFooter className="flex-col items-start gap-1.5 text-sm">
                             <div className="line-clamp-1 flex gap-2 font-medium">
-                                Courses added <IconTrendingUp className="size-4" />
+                                Courses added{" "}
+                                {data.teacher?.createdCoursesChange >= 0 ? (
+                                    <IconTrendingUp className="size-4" />
+                                ) : (
+                                    <IconTrendingDown className="size-4" />
+                                )}
                             </div>
                             <div className="text-muted-foreground">
                                 Total courses you’ve created
@@ -363,13 +429,13 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    {data.teacher?.studentEngagement && data.teacher.studentEngagement > 50 ? (
+                                    {data.teacher?.studentEngagementChange >= 0 ? (
                                         <IconTrendingUp />
                                     ) : (
                                         <IconTrendingDown />
                                     )}
-                                    {data.teacher?.studentEngagement && data.teacher.studentEngagement > 50 ? "+" : "-"}
-                                    {Math.round(Math.random() * 5)}%
+                                    {data.teacher?.studentEngagementChange >= 0 ? "+" : ""}
+                                    {Math.round(data.teacher?.studentEngagementChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
@@ -378,7 +444,7 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                                 {data.teacher?.studentEngagement && data.teacher.studentEngagement > 50
                                     ? "High engagement"
                                     : "Engagement needs boost"}{" "}
-                                {data.teacher?.studentEngagement && data.teacher.studentEngagement > 50 ? (
+                                {data.teacher?.studentEngagementChange >= 0 ? (
                                     <IconTrendingUp className="size-4" />
                                 ) : (
                                     <IconTrendingDown className="size-4" />
@@ -397,14 +463,24 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                             </CardTitle>
                             <CardAction>
                                 <Badge variant="outline">
-                                    <IconTrendingUp />
-                                    +{Math.round(Math.random() * 10)}%
+                                    {data.teacher?.enrollmentsInCoursesChange >= 0 ? (
+                                        <IconTrendingUp />
+                                    ) : (
+                                        <IconTrendingDown />
+                                    )}
+                                    {data.teacher?.enrollmentsInCoursesChange >= 0 ? "+" : ""}
+                                    {Math.round(data.teacher?.enrollmentsInCoursesChange ?? 0)}%
                                 </Badge>
                             </CardAction>
                         </CardHeader>
                         <CardFooter className="flex-col items-start gap-1.5 text-sm">
                             <div className="line-clamp-1 flex gap-2 font-medium">
-                                Popular courses <IconTrendingUp className="size-4" />
+                                Popular courses{" "}
+                                {data.teacher?.enrollmentsInCoursesChange >= 0 ? (
+                                    <IconTrendingUp className="size-4" />
+                                ) : (
+                                    <IconTrendingDown className="size-4" />
+                                )}
                             </div>
                             <div className="text-muted-foreground">
                                 Total students enrolled in your courses
@@ -413,54 +489,6 @@ export function CustomCards({ role, data }: DashboardCardsProps) {
                     </Card>
                 </>
             )}
-        </div>
-    );
-}
-
-// Example usage with mock data
-export default function DashboardExample() {
-    const studentData = {
-        role: "student" as const,
-        data: {
-            student: {
-                enrolledCourses: 5,
-                averageProgress: 75,
-                completedCourses: 2,
-            },
-        },
-    };
-
-    const adminData = {
-        role: "admin" as const,
-        data: {
-            admin: {
-                totalRevenue: 1250.0,
-                totalEnrollments: 45678,
-                monthlyProfitChange: 4.5,
-                activeCourses: 120,
-            },
-        },
-    };
-
-    const teacherData = {
-        role: "teacher" as const,
-        data: {
-            teacher: {
-                createdCourses: 10,
-                studentEngagement: 60,
-                enrollmentsInCourses: 150,
-            },
-        },
-    };
-
-    return (
-        <div>
-            <h2>Student Dashboard</h2>
-            <DashboardCards {...studentData} />
-            <h2>Admin Dashboard</h2>
-            <DashboardCards {...adminData} />
-            <h2>Teacher Dashboard</h2>
-            <DashboardCards {...teacherData} />
         </div>
     );
 }

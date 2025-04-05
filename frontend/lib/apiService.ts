@@ -41,6 +41,13 @@ export class ApiService {
         };
     }
 
+    private getFileUploadHeaders(): Record<string, string> {
+        const token = this.getAuthToken();
+        return {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+    }
+
     // Helper method to handle API response errors
     private async handleApiError(res: Response, resource: string, action: string): Promise<void> {
         let errorMessage = `Failed to ${action} ${resource}`;
@@ -136,10 +143,27 @@ export class ApiService {
         });
     }
 
+    public async getDashboard<T>(): Promise<T> {
+        try {
+            const res = await fetch(`${API_BASE_URL}/dashboard`, {
+                method: 'GET',
+                headers: this.getAuthHeaders(),
+            });
+            if (!res.ok) {
+                await this.handleApiError(res, 'dashboard', 'get');
+            }
+
+            const response: T = await res.json();
+            return response;
+        } catch (err) {
+            this.handleCatchError(err, 'dashboard', 'get');
+        }
+    }
+
     // CREATE: Create a new resource
     public async create<T, U>(resource: string, data: U): Promise<T> {
         try {
-            const res = await fetch(`${API_BASE_URL}/${resource}/`, {
+            const res = await fetch(`${API_BASE_URL}/${resource}`, {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
                 body: JSON.stringify(data),
@@ -262,6 +286,31 @@ export class ApiService {
             }
         } catch (err) {
             this.handleCatchError(err, `${resource} with ID ${id}`, 'delete');
+        }
+    }
+
+    public async uploadFile<T>(
+        resource: string,
+        id: number | string,
+        file: File,
+        fieldName: string = "image"
+    ): Promise<T> {
+        try {
+            const formData = new FormData();
+            formData.append(fieldName, file);
+            console.table([...formData.entries()]);
+            const res = await fetch(`${API_BASE_URL}/${resource}/${id}/upload-image`, {
+                method: 'POST',
+                headers: this.getFileUploadHeaders(),
+                body: formData,
+            });
+            if (!res.ok) {
+                await this.handleApiError(res, `${resource} image with ID ${id}`, 'upload');
+            }
+            const response: T = await res.json();
+            return response;
+        } catch (err) {
+            this.handleCatchError(err, `${resource} image with ID ${id}`, 'upload');
         }
     }
 }

@@ -1,0 +1,50 @@
+[
+    {
+        "email": "admin@gmail.com",
+        "username": "Admin",
+        "password": "admin123",
+        "role": "admin",
+        "is_superuser": true,
+        "is_staff": true
+    },
+    {
+        "email": "teacher1@gmail.com",
+        "username": "Tr. Joe",
+        "password": "pass123",
+        "role": "teacher",
+        "first_name": "John",
+        "last_name": "Doe"
+    },
+    {
+        "email": "teacher2@gmail.com",
+        "username": "Tr. Smith",
+        "password": "pass123",
+        "role": "teacher",
+        "first_name": "Alice",
+        "last_name": "Smith"
+    },
+    {
+        "email": "teacher3@gmail.com",
+        "username": "Tr. Jones",
+        "password": "pass123",
+        "role": "teacher",
+        "first_name": "Michael",
+        "last_name": "Jones"
+    },
+    {
+        "email": "teacher4@gmail.com",
+        "username": "Tr. Williams",
+        "password": "pass123",
+        "role": "teacher",
+        "first_name": "Laura",
+        "last_name": "Williams"
+    },
+    {
+        "email": "teacher5@gmail.com",
+        "username": "Tr. Brown",
+        "password": "pass123",
+        "role": "teacher",
+        "first_name": "Robert",
+        "last_name": "Brown"
+    }
+]

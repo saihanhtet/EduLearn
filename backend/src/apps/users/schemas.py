@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from ninja import Schema
 from pydantic import BaseModel, EmailStr
@@ -15,11 +16,16 @@ class ProfileSchema(Schema):
     date_of_birth: Optional[str] = None  # ISO format: "YYYY-MM-DD"
     phone_number: Optional[str] = None
     account_status: str = "Active"
-    joined_date: str  # ISO format: "YYYY-MM-DDTHH:MM:SSZ"
+    joined_date: datetime
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class UserDetailSchema(Schema):
-    id: int
+    _id: int
     email: EmailStr
     username: str
     role: str  # "student", "teacher", "admin"

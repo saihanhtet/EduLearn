@@ -1,0 +1,211 @@
+[
+    {
+        "title": "Intro to Algebra",
+        "subject": "Math",
+        "level": "Beginner",
+        "difficulty_score": 2.0,
+        "description": "Basic algebra concepts",
+        "created_by": "teacher1@gmail.com",
+        "image": "courses/math_algebra.png",
+        "status": "Published",
+        "price": 24.52
+    },
+    {
+        "title": "Calculus Basics",
+        "subject": "Math",
+        "level": "Intermediate",
+        "difficulty_score": 3.0,
+        "description": "Introduction to calculus",
+        "created_by": "teacher1@gmail.com",
+        "image": "courses/calculus_basics.png",
+        "status": "Published",
+        "price": 88.62
+    },
+    {
+        "title": "Advanced Calculus",
+        "subject": "Math",
+        "level": "Advanced",
+        "difficulty_score": 4.5,
+        "description": "Advanced calculus topics",
+        "created_by": "teacher1@gmail.com",
+        "image": "courses/advanced_calculus.png",
+        "status": "Published",
+        "price": 74.25
+    },
+    {
+        "title": "Linear Algebra",
+        "subject": "Math",
+        "level": "Intermediate",
+        "difficulty_score": 3.5,
+        "description": "Fundamentals of linear algebra",
+        "created_by": "teacher1@gmail.com",
+        "image": "courses/linear_algebra.png",
+        "status": "Published",
+        "price": 85.09
+    },
+    {
+        "title": "Statistics 101",
+        "subject": "Math",
+        "level": "Beginner",
+        "difficulty_score": 2.5,
+        "description": "Introduction to statistics",
+        "created_by": "teacher1@gmail.com",
+        "image": "courses/statistics_101.png",
+        "status": "Published",
+        "price": 73.13
+    },
+    {
+        "title": "Probability Theory",
+        "subject": "Math",
+        "level": "Advanced",
+        "difficulty_score": 4.0,
+        "description": "Advanced probability concepts",
+        "created_by": "teacher1@gmail.com",
+        "image": "courses/probability_theory.png",
+        "status": "Published",
+        "price": 35.84
+    },
+    {
+        "title": "Physics 101",
+        "subject": "Science",
+        "level": "Beginner",
+        "difficulty_score": 2.5,
+        "description": "Basic physics principles",
+        "created_by": "teacher2@gmail.com",
+        "image": "courses/physics_101.png",
+        "status": "Published",
+        "price": 39.81
+    },
+    {
+        "title": "Quantum Mechanics",
+        "subject": "Science",
+        "level": "Advanced",
+        "difficulty_score": 5.0,
+        "description": "Advanced physics topics",
+        "created_by": "teacher2@gmail.com",
+        "image": "courses/quantum_mechanics.png",
+        "status": "Published",
+        "price": 78.87
+    },
+    {
+        "title": "Chemistry Basics",
+        "subject": "Science",
+        "level": "Beginner",
+        "difficulty_score": 2.0,
+        "description": "Introduction to chemistry",
+        "created_by": "teacher2@gmail.com",
+        "image": "courses/chemistry_basics.png",
+        "status": "Published",
+        "price": 94.02
+    },
+    {
+        "title": "Organic Chemistry",
+        "subject": "Science",
+        "level": "Intermediate",
+        "difficulty_score": 3.5,
+        "description": "Fundamentals of organic chemistry",
+        "created_by": "teacher2@gmail.com",
+        "image": "courses/organic_chemistry.png",
+        "status": "Published",
+        "price": 36.3
+    },
+    {
+        "title": "Biology 101",
+        "subject": "Science",
+        "level": "Beginner",
+        "difficulty_score": 2.0,
+        "description": "Introduction to biology",
+        "created_by": "teacher2@gmail.com",
+        "image": "courses/biology_101.png",
+        "status": "Published",
+        "price": 32.46
+    },
+    {
+        "title": "Genetics",
+        "subject": "Science",
+        "level": "Advanced",
+        "difficulty_score": 4.5,
+        "description": "Advanced topics in genetics",
+        "created_by": "teacher2@gmail.com",
+        "image": "courses/genetics.png",
+        "status": "Published",
+        "price": 79.86
+    },
+    {
+        "title": "World History",
+        "subject": "History",
+        "level": "Beginner",
+        "difficulty_score": 2.0,
+        "description": "Overview of world history",
+        "created_by": "teacher3@gmail.com",
+        "image": "courses/world_history.png",
+        "status": "Published",
+        "price": 39.27
+    },
+    {
+        "title": "Ancient Civilizations",
+        "subject": "History",
+        "level": "Intermediate",
+        "difficulty_score": 3.0,
+        "description": "Study of ancient civilizations",
+        "created_by": "teacher3@gmail.com",
+        "image": "courses/ancient_civilizations.png",
+        "status": "Published",
+        "price": 83.82
+    },
+    {
+        "title": "Modern History",
+        "subject": "History",
+        "level": "Advanced",
+        "difficulty_score": 4.0,
+        "description": "Modern historical events",
+        "created_by": "teacher3@gmail.com",
+        "image": "courses/modern_history.png",
+        "status": "Published",
+        "price": 17.88
+    },
+    {
+        "title": "Intro to Programming",
+        "subject": "Computer Science",
+        "level": "Beginner",
+        "difficulty_score": 2.5,
+        "description": "Basics of programming",
+        "created_by": "teacher5@gmail.com",
+        "image": "courses/programming_intro.png",
+        "status": "Published",
+        "price": 13.84
+    },
+    {
+        "title": "Data Structures",
+        "subject": "Computer Science",
+        "level": "Intermediate",
+        "difficulty_score": 3.5,
+        "description": "Fundamentals of data structures",
+        "created_by": "teacher5@gmail.com",
+        "status": "Published",
+        "image": "courses/data_structures.png",
+        "price": 18.8
+    },
+    {
+        "title": "Machine Learning",
+        "subject": "Computer Science",
+        "level": "Advanced",
+        "difficulty_score": 5.0,
+        "description": "Introduction to machine learning",
+        "created_by": "teacher5@gmail.com",
+        "status": "Published",
+        "image": "courses/machine_learning.png",
+        "price": 28.98
+    },
+    {
+        "title": "Algorithms",
+        "subject": "Computer Science",
+        "level": "Intermediate",
+        "difficulty_score": 4.0,
+        "description": "Study of algorithms",
+        "created_by": "teacher5@gmail.com",
+        "image": "courses/algorithms.png",
+        "status": "Published",
+        "price": 86.78
+    }
+]

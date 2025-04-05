@@ -160,7 +160,7 @@ export function RoleBasedDataTable({ role, data }: RoleBasedDataTableProps) {
     return (
         <div className="rounded-lg border">
             <Table>
-                <TableHeader>
+                <TableHeader className="bg-muted sticky top-0 z-10">
                     {table.getHeaderGroups().map((headerGroup) => (
                         <TableRow key={headerGroup.id}>
                             {headerGroup.headers.map((header) => (
